@@ -1,0 +1,45 @@
+# --- Python Environment ---
+__pycache__/
+*.pyc
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# --- Project Specific Data ---
+# It is best practice to keep large datasets out of version control
+datasets/
+data/
+
+# --- Experiment Results & Artifacts ---
+# Ignore the model checkpoints generated during training
+*.pkl
+*.pth
+*.ckpt
+
+# Ignore logs and sweep results to keep the repo clean
+# You can comment these out if you specifically want to track them
+*.csv
+*.log
+*.npy
+*.npz
+
+# --- Evaluation & Visualizations ---
+# Ignore generated plots from your resolution sweeps
+*.png
+*.jpg
+*.pdf
+
+# --- IDEs and System Files ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Distribution / Packaging ---
+dist/
+build/
+*.egg-info/
