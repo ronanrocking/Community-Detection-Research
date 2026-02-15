@@ -1,0 +1,9 @@
+#Dataset Files
+datasets/
+
+#Model Checkpoints
+*.pkl
+
+*.csv
+
+*.pyc
