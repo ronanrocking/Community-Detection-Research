@@ -4,7 +4,7 @@ from DGI import DeepGraphInfomax
 
 import evaluation
 import time
-
+import torch.nn.functional as F
 from sklearn.metrics import davies_bouldin_score
 import networkx as nx
 import numpy as np
@@ -28,11 +28,11 @@ parser.add_argument('--num_cluster_iter', type=int, default=1, help='Clustering 
 parser.add_argument('--seed', type=int, default=24, help='Base random seed.')
 args = parser.parse_args()
 
-# --- Core Helper Functions (Original Research Logic) ---
+# --- Core Helper Functions ---
 def make_modularity_matrix(adj):
-    adj = adj*(torch.ones(adj.shape[0], adj.shape[0]) - torch.eye(adj.shape[0]))
+    adj = adj * (torch.ones(adj.shape[0], adj.shape[0]) - torch.eye(adj.shape[0]))
     degrees = adj.sum(dim=0).unsqueeze(1)
-    mod = adj - degrees@degrees.t()/adj.sum()
+    mod = adj - degrees @ degrees.t() / adj.sum()
     return mod
 
 def result(graph, pred, labels):
@@ -44,86 +44,104 @@ def result(graph, pred, labels):
     q = evaluation.compute_modularity(graph, pred)
     return nmi, ac, f1, ari, q
 
-# --- NEW: CONSENSUS SCAFFOLD GENERATION ---
-def get_consensus_scaffold(graph, algo_type, n_runs=15):
+# --- FIXED: FEATURE-AWARE CONSENSUS SCAFFOLD ---
+def get_feature_aware_consensus(graph, features, algo_type, n_runs=1, sim_threshold=0.5):
     """
-    Runs clustering multiple times with varying seeds to find the 
-    most stable community structure (Consensus).
+    1. Runs clustering n_runs times.
+    2. Builds a co-association matrix.
+    3. Deletes edges where Cosine Similarity < sim_threshold.
+    4. RE-RUNS the correct algorithm (Louvain or Leiden) on the purified graph.
     """
     num_nodes = graph.number_of_nodes()
-    # Co-association matrix: tracks how many times nodes i and j share a community
     co_matrix = np.zeros((num_nodes, num_nodes))
+    feat_norm = F.normalize(features, p=2, dim=1)
     
-    print(f"Generating Consensus {algo_type} Scaffold ({n_runs} runs)...")
+    print(f"Building Feature-Aware Scaffold ({algo_type}) | Runs: {n_runs} | Threshold: {sim_threshold}")
     
     for i in range(n_runs):
-        # We vary the seed each run to explore different local optima
         current_seed = args.seed + i 
-        
         if algo_type == "Louvain":
-            # Louvain is stochastic and sensitive to node processing order
             part = nx.community.louvain_communities(graph, resolution=0.3, seed=current_seed)
             membership = np.zeros(num_nodes)
             for cluster_id, nodes in enumerate(part):
                 for node in nodes: membership[node] = cluster_id
         else:
-            # Leiden also has a stochastic refinement phase
             g_ig = ig.Graph.from_networkx(graph)
             part = leidenalg.find_partition(g_ig, leidenalg.RBConfigurationVertexPartition, 
                                             resolution_parameter=0.3, seed=current_seed)
             membership = part.membership
 
-        # Update the co-association matrix with pairs found in the same cluster
+        # Build Co-association Matrix
         for n1 in range(num_nodes):
-            for n2 in range(n1 + 1, num_nodes):
-                if membership[n1] == membership[n2]:
+            for n2 in graph.neighbors(n1):
+                if n2 > n1 and membership[n1] == membership[n2]:
                     co_matrix[n1, n2] += 1
                     co_matrix[n2, n1] += 1
 
-    # CONSENSUS THRESHOLD:
-    # Only keep connections that appeared in > 50% of the runs (Majority Vote)
-    consensus_adj = (co_matrix / n_runs) > 0.5
-    consensus_graph = nx.from_numpy_array(consensus_adj.astype(int))
+    # THE GUARD: Construct the purified adjacency matrix
+    consensus_adj = np.zeros((num_nodes, num_nodes))
+    rows, cols = np.where(co_matrix > (n_runs / 2))
     
-    # Final pass to extract the stable community structure
-    consensus_communities = nx.community.louvain_communities(consensus_graph, resolution=0.3, seed=args.seed)
-    return consensus_communities
+    for r, c in zip(rows, cols):
+        if r < c:
+            cos_sim = torch.dot(feat_norm[r], feat_norm[c]).item()
+            if cos_sim > sim_threshold:
+                consensus_adj[r, c] = 1
+                consensus_adj[c, r] = 1
+
+    consensus_graph = nx.from_numpy_array(consensus_adj)
+    
+    # --- FINAL EXTRACTION (FIXED TO MATCH ALGO_TYPE) ---
+    if algo_type == "Louvain":
+        return nx.community.louvain_communities(consensus_graph, resolution=0.3, seed=args.seed)
+    else:
+        # Correctly using Leiden for the final pass
+        g_ig_final = ig.Graph.from_networkx(consensus_graph)
+        part_final = leidenalg.find_partition(g_ig_final, leidenalg.RBConfigurationVertexPartition, 
+                                              resolution_parameter=0.3, seed=args.seed)
+        
+        final_comm = [set() for _ in range(len(set(part_final.membership)))]
+        for node_idx, cluster_idx in enumerate(part_final.membership):
+            final_comm[cluster_idx].add(node_idx)
+        return final_comm
 
 # --- Main Execution Setup ---
-#dataset_list = ["acm", "amac", "amap", "citeseer", "cocs", "cora", "film", "pubmed", "uat"]
-dataset_list = ["cocs", "pubmed"]
+#dataset_list = ["acm"]
+dataset_list = ["acm", "amac", "amap", "citeseer", "cora", "film", "pubmed"]
 device = torch.device('cpu')
-b = 0.001 # Modularity loss weight from paper
-file_name = "consensus_results.csv"
+b = 0.001 
+file_name = "fix_test_results.csv"
 
 for ds in dataset_list:
     args.dataset = ds
-    print(f"\n{'='*20} DATASET: {ds.upper()} {'='*20}")
+    print(f"\n{'='*15} DATASET: {ds.upper()} {'='*15}")
     
     try:
-        # Load Data
         data = load_data("./", ds, "tensor", "npy", "npy", False, False, False, None)
         feat, label = data.feature.type(torch.float32), data.label
         A = data.adj
         adj, edge = torch.tensor(A).type(torch.float32), torch.tensor(np.array(np.where(A == 1)))
         test_object, graph = make_modularity_matrix(adj), nx.from_numpy_array(A)
 
-        for algo_name in ["Louvain","Leiden"]:
+        for algo_name in ["Louvain", "Leiden"]:
             start_total = time.perf_counter()
             
-            # STEP 1: Build the Consensus Scaffold
-            # This replaces the single-run "lucky" scaffold with a stable reference
-            structure_community = get_consensus_scaffold(graph, algo_name, n_runs=15)
+            # STEP 1: Feature-Aware Consensus (Testing with threshold 0.3)
+            structure_community = get_feature_aware_consensus(graph, feat, algo_name, n_runs=1, sim_threshold=0.5)
 
-            # STEP 2: Paper's Structural Filtering Logic
-            # Removes tiny outlier communities before calculating centers (mu)
+            # STEP 2: Original Size-Based Filtering 
             nums = [len(i) for i in structure_community]
+            if not nums:
+                print(f"Skipping {ds} - No communities found.")
+                continue
+            
             threshold = np.mean(nums) + 0.5 * np.std(nums)
             selected_communities = [c for c in structure_community if len(c) > threshold]
+            
             K = len(selected_communities)
             args.K = K
 
-            # STEP 3: Model Training (Exactly as original)
+            # STEP 3: Model Training
             np.random.seed(args.seed)
             torch.manual_seed(args.seed)
             model = DeepGraphInfomax(hidden_channels=args.hidden, encoder=Encoder(feat.shape[1], args.hidden), 
@@ -133,7 +151,7 @@ for ds in dataset_list:
             max_nmi, max_ac, max_ari, max_f1, max_q, min_dbi = 0, 0, 0, 0, 0, 3
             patience, stop_cnt, min_loss = 200, 0, 1e9
 
-            print(f"Training with {K} stable communities...")
+            print(f"Training {algo_name} with {K} communities...")
             for epoch in range(1, 301):
                 model.train()
                 optimizer.zero_grad()
@@ -142,7 +160,6 @@ for ds in dataset_list:
                 loss.backward()
                 optimizer.step()
 
-                # Test and keep best metrics
                 if epoch % 2 == 0:
                     model.eval()
                     with torch.no_grad():
@@ -158,12 +175,11 @@ for ds in dataset_list:
                 else: stop_cnt += 1
                 if stop_cnt >= patience: break
 
-            # Save Results
             end_total = time.perf_counter()
             with open(file_name, "a+") as f:
                 f.write(f"{ds},{algo_name},{K},{max_nmi:.4f},{max_ac:.4f},{max_f1:.4f},{max_ari:.4f},{min_dbi:.4f},{max_q:.4f},{end_total-start_total:.2f}\n")
             
-            print(f"Finished {algo_name}. Max NMI: {max_nmi:.4f}")
+            print(f"Finished {algo_name} on {ds}. Final K: {K} | NMI: {max_nmi:.4f}")
 
     except Exception as e:
         print(f"Error on {ds}: {e}")
