@@ -40,6 +40,8 @@ class DeepGraphInfomax(torch.nn.Module):
         reset(self.summary)
         uniform(self.hidden_channels, self.weight)
 
+    #UPDATING FORWARD FUNCITON
+    '''
     def forward(self, *args, **kwargs):
         pos_z = self.encoder(*args, **kwargs)  # GCN学习节点表示
         pos_z = torch.diag(1. / torch.norm(pos_z, p=2, dim=1)) @ pos_z  # 节点表示进行L2归一化处理
@@ -50,6 +52,44 @@ class DeepGraphInfomax(torch.nn.Module):
 
         dist = pos_z @ mu.t()
         r = torch.softmax(self.cluster_temp * dist, 1)
+        return pos_z, mu, r, dist'''
+    
+
+    #updated FORWARD FUNCITON
+    def forward(self, x, edge_index, communities, degrees):
+        # Stage 2: Fusion Learning - GCN Encoder
+        pos_z = self.encoder(x, edge_index, None) 
+        
+        # L2 Normalization (as specified in Equation 7) [cite: 270]
+        pos_z = torch.diag(1. / (torch.norm(pos_z, p=2, dim=1) + EPS)) @ pos_z 
+
+        # Stage 3: Weighted Node-Community Relationship Modeling
+        mu_list = []
+        for comm in communities:
+            # Convert community list to long tensor for indexing
+            comm_tensor = torch.tensor(list(comm), dtype=torch.long, device=pos_z.device)
+            
+            # Extract embeddings and weights (degrees) for nodes in this community 
+            comm_embeddings = pos_z.index_select(0, comm_tensor)
+            comm_weights = degrees.index_select(0, comm_tensor).view(-1, 1)
+            
+            # Weighted Aggregation: (Sum of (weight * embedding)) / (Sum of weights)
+            weighted_sum = (comm_embeddings * comm_weights).sum(dim=0)
+            total_weight = comm_weights.sum()
+            
+            # Calculate the weighted center [cite: 280]
+            u_j = weighted_sum / (total_weight + EPS)
+            mu_list.append(u_j)
+
+        # Form the center matrix U [cite: 279]
+        mu = torch.stack(mu_list, dim=0)
+
+        # Calculate Similarity (Dot product equivalent to Cosine Similarity due to L2 Norm) [cite: 288]
+        dist = pos_z @ mu.t()
+        
+        # Soft Membership Matrix P (Equation 10) [cite: 292, 295]
+        r = torch.softmax(self.cluster_temp * dist, dim=1)
+        
         return pos_z, mu, r, dist
 
     def discriminate(self, z, summary, sigmoid=True):

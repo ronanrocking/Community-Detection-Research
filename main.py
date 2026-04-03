@@ -46,84 +46,71 @@ def result(graph, pred, labels):
 
 # --- NEW: CONSENSUS SCAFFOLD GENERATION ---
 def get_consensus_scaffold(graph, algo_type, n_runs=15):
-    """
-    Runs clustering multiple times with varying seeds to find the 
-    most stable community structure (Consensus).
-    """
     num_nodes = graph.number_of_nodes()
-    # Co-association matrix: tracks how many times nodes i and j share a community
     co_matrix = np.zeros((num_nodes, num_nodes))
     
     print(f"Generating Consensus {algo_type} Scaffold ({n_runs} runs)...")
     
     for i in range(n_runs):
-        # We vary the seed each run to explore different local optima
         current_seed = args.seed + i 
         
         if algo_type == "Louvain":
-            # Louvain is stochastic and sensitive to node processing order
             part = nx.community.louvain_communities(graph, resolution=0.3, seed=current_seed)
             membership = np.zeros(num_nodes)
             for cluster_id, nodes in enumerate(part):
                 for node in nodes: membership[node] = cluster_id
         else:
-            # Leiden also has a stochastic refinement phase
             g_ig = ig.Graph.from_networkx(graph)
             part = leidenalg.find_partition(g_ig, leidenalg.RBConfigurationVertexPartition, 
                                             resolution_parameter=0.3, seed=current_seed)
             membership = part.membership
 
-        # Update the co-association matrix with pairs found in the same cluster
         for n1 in range(num_nodes):
             for n2 in range(n1 + 1, num_nodes):
                 if membership[n1] == membership[n2]:
                     co_matrix[n1, n2] += 1
                     co_matrix[n2, n1] += 1
 
-    # CONSENSUS THRESHOLD:
-    # Only keep connections that appeared in > 50% of the runs (Majority Vote)
     consensus_adj = (co_matrix / n_runs) > 0.5
     consensus_graph = nx.from_numpy_array(consensus_adj.astype(int))
     
-    # Final pass to extract the stable community structure
     consensus_communities = nx.community.louvain_communities(consensus_graph, resolution=0.3, seed=args.seed)
     return consensus_communities
 
 # --- Main Execution Setup ---
-#dataset_list = ["acm", "amac", "amap", "citeseer", "cocs", "cora", "film", "pubmed", "uat"]
-dataset_list = ["cocs", "pubmed"]
+dataset_list = ["acm", "amac"]
 device = torch.device('cpu')
 b = 0.001 # Modularity loss weight from paper
-file_name = "consensus_results.csv"
+file_name = "consensus_results_weightedCenters.csv"
 
 for ds in dataset_list:
     args.dataset = ds
     print(f"\n{'='*20} DATASET: {ds.upper()} {'='*20}")
     
     try:
-        # Load Data
         data = load_data("./", ds, "tensor", "npy", "npy", False, False, False, None)
-        feat, label = data.feature.type(torch.float32), data.label
+        feat, label = data.feature.type(torch.float32).to(device), data.label
         A = data.adj
-        adj, edge = torch.tensor(A).type(torch.float32), torch.tensor(np.array(np.where(A == 1)))
-        test_object, graph = make_modularity_matrix(adj), nx.from_numpy_array(A)
+        adj, edge = torch.tensor(A).type(torch.float32).to(device), torch.tensor(np.array(np.where(A == 1))).to(device)
+        test_object, graph = make_modularity_matrix(adj.cpu()), nx.from_numpy_array(A)
+
+        # ---------------------------------------------------------
+        # UPDATED: Calculate Node Degrees for Weighted Aggregation
+        # These represent the structural importance of each node 
+        # ---------------------------------------------------------
+        degrees = adj.sum(dim=1).to(device) 
 
         for algo_name in ["Louvain","Leiden"]:
             start_total = time.perf_counter()
             
-            # STEP 1: Build the Consensus Scaffold
-            # This replaces the single-run "lucky" scaffold with a stable reference
             structure_community = get_consensus_scaffold(graph, algo_name, n_runs=15)
 
-            # STEP 2: Paper's Structural Filtering Logic
-            # Removes tiny outlier communities before calculating centers (mu)
             nums = [len(i) for i in structure_community]
             threshold = np.mean(nums) + 0.5 * np.std(nums)
             selected_communities = [c for c in structure_community if len(c) > threshold]
             K = len(selected_communities)
             args.K = K
 
-            # STEP 3: Model Training (Exactly as original)
             np.random.seed(args.seed)
             torch.manual_seed(args.seed)
             model = DeepGraphInfomax(hidden_channels=args.hidden, encoder=Encoder(feat.shape[1], args.hidden), 
@@ -137,19 +124,28 @@ for ds in dataset_list:
             for epoch in range(1, 301):
                 model.train()
                 optimizer.zero_grad()
-                pos_z, mu, r, dist = model(feat, edge, selected_communities)
-                loss = b * model.modularity(mu, r, pos_z, dist, adj, test_object, args)
+                
+                # ---------------------------------------------------------
+                # UPDATED: Pass 'degrees' to the model's forward pass
+                # This anchors community centers to high-degree nodes [cite: 279, 280]
+                # ---------------------------------------------------------
+                pos_z, mu, r, dist = model(feat, edge, selected_communities, degrees)
+                
+                loss = b * model.modularity(mu, r, pos_z, dist, adj, test_object.to(device), args)
                 loss.backward()
                 optimizer.step()
 
-                # Test and keep best metrics
                 if epoch % 2 == 0:
                     model.eval()
                     with torch.no_grad():
-                        node_emb, _, r_val, _ = model(feat, edge, selected_communities)
+                        # ---------------------------------------------------------
+                        # UPDATED: Pass 'degrees' here for consistent eval embeddings
+                        # ---------------------------------------------------------
+                        node_emb, _, r_val, _ = model(feat, edge, selected_communities, degrees)
+                    
                     r_assign = r_val.argmax(dim=1)
-                    t_nmi, t_ac, t_f1, t_ari, t_q = result(graph, r_assign, label)
-                    t_dbi = davies_bouldin_score(node_emb, r_assign)
+                    t_nmi, t_ac, t_f1, t_ari, t_q = result(graph, r_assign.cpu(), label)
+                    t_dbi = davies_bouldin_score(node_emb.cpu(), r_assign.cpu())
                     
                     max_nmi, max_ac, max_f1, max_ari, max_q = max(max_nmi, t_nmi), max(max_ac, t_ac), max(max_f1, t_f1), max(max_ari, t_ari), max(max_q, t_q)
                     min_dbi = min(min_dbi, t_dbi)
@@ -158,7 +154,6 @@ for ds in dataset_list:
                 else: stop_cnt += 1
                 if stop_cnt >= patience: break
 
-            # Save Results
             end_total = time.perf_counter()
             with open(file_name, "a+") as f:
                 f.write(f"{ds},{algo_name},{K},{max_nmi:.4f},{max_ac:.4f},{max_f1:.4f},{max_ari:.4f},{min_dbi:.4f},{max_q:.4f},{end_total-start_total:.2f}\n")
