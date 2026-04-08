@@ -1,0 +1,6 @@
+Dataset: acm | Res: 0.1 | K: 6 | NMI: 0.5776 | ACC: 0.7669 | ARI: 0.6077 | Q: 0.7199 | DBI: 0.5320
+Dataset: acm | Res: 0.3 | K: 10 | NMI: 0.5556 | ACC: 0.8188 | ARI: 0.6006 | Q: 0.7449 | DBI: 0.6787
+Dataset: acm | Res: 0.5 | K: 16 | NMI: 0.5405 | ACC: 0.7514 | ARI: 0.5762 | Q: 0.7742 | DBI: 0.6019
+Dataset: acm | Res: 0.7 | K: 20 | NMI: 0.4442 | ACC: 0.6169 | ARI: 0.4520 | Q: 0.7878 | DBI: 0.7102
+Dataset: acm | Res: 0.9 | K: 26 | NMI: 0.4431 | ACC: 0.5927 | ARI: 0.3856 | Q: 0.8079 | DBI: 0.7146
+Dataset: acm | Res: 1.1 | K: 31 | NMI: 0.4471 | ACC: 0.5564 | ARI: 0.3811 | Q: 0.8016 | DBI: 0.5836

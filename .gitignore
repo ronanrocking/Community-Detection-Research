@@ -16,16 +16,16 @@ data/
 
 # --- Experiment Results & Artifacts ---
 # Ignore the model checkpoints generated during training
-*.pkl
-*.pth
-*.ckpt
+#*.pkl
+#*.pth
+#*.ckpt
 
 # Ignore logs and sweep results to keep the repo clean
 # You can comment these out if you specifically want to track them
-*.csv
-*.log
-*.npy
-*.npz
+#*.csv
+#*.log
+#*.npy
+#*.npz
 
 # --- Evaluation & Visualizations ---
 # Ignore generated plots from your resolution sweeps
