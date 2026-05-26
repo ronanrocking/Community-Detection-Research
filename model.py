@@ -5,7 +5,7 @@ from torch.nn import Linear
 from torch_geometric.nn import GCNConv, GATConv, APPNP
 import math
 import sklearn
-from torch_geometric.utils import dropout_adj
+from torch_geometric.utils import dropout_edge
 
 # The GELU function is present in the provided model.py but is not used in the Encoder.
 # The Encoder uses PReLU as per the provided code.
@@ -51,7 +51,7 @@ class Encoder(nn.Module):
 
 
     def forward(self, x, edge_index, structrue_center):
-        edge_index_dropped, _ = dropout_adj(edge_index, p=0.2, force_undirected=True, training=self.training)
+        edge_index_dropped, _ = dropout_edge(edge_index, p=0.2, force_undirected=True, training=self.training)
         x = self.conv(x, edge_index_dropped)
         x = self.prelu(x)
         return x
