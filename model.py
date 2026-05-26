@@ -44,11 +44,13 @@ class Encoder(nn.Module):
     def __init__(self, in_channels, hidden_channels):
         super(Encoder, self).__init__()
         self.conv = GCNConv(in_channels, hidden_channels) # , cached=True)
+        self.norm = nn.LayerNorm(hidden_channels) # Add LayerNorm
         self.prelu = nn.PReLU(hidden_channels)
 
 
     def forward(self, x, edge_index, structrue_center):
         x = self.conv(x, edge_index)
+        x = self.norm(x) # Apply LayerNorm
         x = self.prelu(x)
         return x
 

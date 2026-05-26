@@ -94,7 +94,7 @@ dataset_list = ["acm", "amac", "amap", "citeseer", "cocs", "cora", "film", "pubm
 #dataset_list = ["cocs", "pubmed"]
 device = torch.device('cpu')
 b = 0.001 # Modularity loss weight from paper
-file_name = "consensus_results_again.csv"
+file_name = "LayerNorm.csv"
 
 for ds in dataset_list:
     args.dataset = ds
