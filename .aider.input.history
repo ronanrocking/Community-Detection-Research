@@ -22,3 +22,39 @@
 
 # 2026-05-26 19:38:01.498039
 +y
+
+# 2026-05-26 19:58:27.030924
++make the same edits again. this is a new branch
+
+# 2026-05-26 19:59:42.948931
++why's there a GAT Class in model.py? is it being used anywhere?
+
+# 2026-05-26 20:00:15.339034
++what does it seem to do? GAT class
+
+# 2026-05-27 00:45:28.655985
++y
+
+# 2026-05-27 00:46:06.462116
++add model.py main.py dgi.py evaluation.py
+
+# 2026-05-27 00:46:07.735224
++a
+
+# 2026-05-27 00:46:16.305341
++y
+
+# 2026-05-27 00:46:31.699237
++what activation function are we using in the GCN
+
+# 2026-05-27 00:54:41.092989
++does this code use DropEdge anywhere?
+
+# 2026-05-27 00:55:59.142159
++what is the curruption function? when is it used
+
+# 2026-05-27 01:01:40.035642
++change the activation function from `PReLU` to `GELU`
+
+# 2026-05-27 01:02:02.543675
++/undo
