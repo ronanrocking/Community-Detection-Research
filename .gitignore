@@ -44,3 +44,5 @@ dist/
 build/
 *.egg-info/
 .aider*
+
+.aider.tags.cache.v4/
