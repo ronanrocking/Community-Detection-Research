@@ -52,6 +52,7 @@ class Encoder(nn.Module):
 
     def forward(self, x, edge_index, structrue_center):
         edge_index_dropped, _ = dropout_edge(edge_index, p=0.1, force_undirected=True, training=self.training)
+        x = F.dropout(x, p=0.5, training=self.training)
         x = self.conv(x, edge_index_dropped)
         x = self.prelu(x)
         return x
