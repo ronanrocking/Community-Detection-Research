@@ -111,6 +111,8 @@ for ds in dataset_list:
         # Calculate sparsity and adaptive feature dropout probability
         sparsity = float((data.x == 0).sum() / data.x.numel())
         adaptive_p_feat = 0.6 * sparsity
+        print(f"  Sparsity for {ds}: {sparsity:.4f}")
+        print(f"  Adaptive p_feat for {ds}: {adaptive_p_feat:.4f}")
 
         for algo_name in ["Louvain","Leiden"]:
             start_total = time.perf_counter()
