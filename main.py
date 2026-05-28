@@ -1,4 +1,4 @@
-from model import Encoder, corruption, Summarizer, cluster_net, GATEncoder
+from model import Encoder, corruption, Summarizer, cluster_net
 from utils.load_data import load_data
 from DGI import DeepGraphInfomax
 
@@ -90,11 +90,11 @@ def get_consensus_scaffold(graph, algo_type, n_runs=15):
     return consensus_communities
 
 # --- Main Execution Setup ---
-dataset_list = ["acm", "amac", "amap", "citeseer", "cocs", "cora", "film", "pubmed", "uat"]
-#dataset_list = ["cocs", "pubmed"]
+#dataset_list = ["acm", "amac", "amap", "citeseer", "cocs", "cora", "film", "pubmed", "uat"]
+dataset_list = ["acm", "citeseer", "cora"]
 device = torch.device('cpu')
 b = 0.001 # Modularity loss weight from paper
-file_name = "consensus_results_again.csv"
+file_name = "GAT Results.csv"
 
 for ds in dataset_list:
     args.dataset = ds
@@ -126,7 +126,7 @@ for ds in dataset_list:
             # STEP 3: Model Training (Exactly as original)
             np.random.seed(args.seed)
             torch.manual_seed(args.seed)
-            model = DeepGraphInfomax(hidden_channels=args.hidden, encoder=GATEncoder(feat.shape[1], args.hidden), 
+            model = DeepGraphInfomax(hidden_channels=args.hidden, encoder=Encoder(feat.shape[1], args.hidden), 
                                      summary=Summarizer(), corruption=corruption, args=args, cluster=cluster_net).to(device)
             optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-3)
 
