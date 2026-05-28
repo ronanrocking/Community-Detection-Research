@@ -44,15 +44,16 @@ class APPNP_model(torch.nn.Module):
         return F.log_softmax(x, dim=1)
 
 class Encoder(nn.Module):
-    def __init__(self, in_channels, hidden_channels):
+    def __init__(self, in_channels, hidden_channels, p_feat=0.5):
         super(Encoder, self).__init__()
         self.conv = GCNConv(in_channels, hidden_channels) # , cached=True)
         self.prelu = nn.PReLU(hidden_channels)
+        self.p_feat = p_feat
 
 
     def forward(self, x, edge_index, structrue_center):
         edge_index_dropped, _ = dropout_edge(edge_index, p=0.1, force_undirected=True, training=self.training)
-        x = F.dropout(x, p=0.5, training=self.training)
+        x = F.dropout(x, p=self.p_feat, training=self.training)
         x = self.conv(x, edge_index_dropped)
         x = self.prelu(x)
         return x

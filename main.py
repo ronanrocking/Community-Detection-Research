@@ -108,6 +108,10 @@ for ds in dataset_list:
         adj, edge = torch.tensor(A).type(torch.float32), torch.tensor(np.array(np.where(A == 1)))
         test_object, graph = make_modularity_matrix(adj), nx.from_numpy_array(A)
 
+        # Calculate sparsity and adaptive feature dropout probability
+        sparsity = float((data.x == 0).sum() / data.x.numel())
+        adaptive_p_feat = 0.6 * sparsity
+
         for algo_name in ["Louvain","Leiden"]:
             start_total = time.perf_counter()
             
@@ -126,7 +130,7 @@ for ds in dataset_list:
             # STEP 3: Model Training (Exactly as original)
             np.random.seed(args.seed)
             torch.manual_seed(args.seed)
-            model = DeepGraphInfomax(hidden_channels=args.hidden, encoder=Encoder(feat.shape[1], args.hidden), 
+            model = DeepGraphInfomax(hidden_channels=args.hidden, encoder=Encoder(feat.shape[1], args.hidden, p_feat=adaptive_p_feat), 
                                      summary=Summarizer(), corruption=corruption, args=args, cluster=cluster_net).to(device)
             optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-3)
 
