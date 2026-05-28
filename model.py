@@ -53,12 +53,14 @@ class Encoder(nn.Module):
         return x
 
 class GATEncoder(nn.Module):
-    def __init__(self, in_channels, hidden_channels):
+    def __init__(self, in_channels, hidden_channels, p_feat=0.25):
         super(GATEncoder, self).__init__()
+        self.p_feat = p_feat
         self.conv = GATConv(in_channels, hidden_channels, heads=4, concat=False)
         self.prelu = nn.PReLU(hidden_channels)
 
     def forward(self, x, edge_index, structure_center=None):
+        x = F.dropout(x, p=self.p_feat, training=self.training)
         x = self.conv(x, edge_index)
         x = self.prelu(x)
         return x

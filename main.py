@@ -91,7 +91,7 @@ def get_consensus_scaffold(graph, algo_type, n_runs=15):
 
 # --- Main Execution Setup ---
 #dataset_list = ["acm", "amac", "amap", "citeseer", "cocs", "cora", "film", "pubmed", "uat"]
-dataset_list = ["acm", "citeseer", "cora"]
+dataset_list = ['acm', 'citeseer', 'cora', 'amap', 'amac']
 device = torch.device('cpu')
 b = 0.001 # Modularity loss weight from paper
 file_name = "GAT Results.csv"
@@ -126,7 +126,7 @@ for ds in dataset_list:
             # STEP 3: Model Training (Exactly as original)
             np.random.seed(args.seed)
             torch.manual_seed(args.seed)
-            model = DeepGraphInfomax(hidden_channels=args.hidden, encoder=GATEncoder(feat.shape[1], args.hidden), 
+            model = DeepGraphInfomax(hidden_channels=args.hidden, encoder=GATEncoder(feat.shape[1], args.hidden, p_feat=0.25), 
                                      summary=Summarizer(), corruption=corruption, args=args, cluster=cluster_net).to(device)
             optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-3)
 
