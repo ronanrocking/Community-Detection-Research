@@ -109,7 +109,7 @@ for ds in dataset_list:
         test_object, graph = make_modularity_matrix(adj), nx.from_numpy_array(A)
 
         # Calculate sparsity and adaptive feature dropout probability
-        feat_matrix = data.x if hasattr(data, 'x') else (dataset[0].x if 'dataset' in locals() else None)
+        feat_matrix = data.x if hasattr(data, 'x') else (data[0].x if hasattr(data, '__getitem__') else None)
         sparsity = float((feat_matrix == 0).sum() / feat_matrix.numel()) if feat_matrix is not None else 0.5
         adaptive_p_feat = 0.6 * sparsity
         print(f"  Sparsity for {ds}: {sparsity:.4f}")
