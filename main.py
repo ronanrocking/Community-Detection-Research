@@ -132,40 +132,40 @@ for ds in dataset_list:
                                          summary=Summarizer(), corruption=corruption, args=args, cluster=cluster_net).to(device)
                 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-3)
 
-            max_nmi, max_ac, max_ari, max_f1, max_q, min_dbi = 0, 0, 0, 0, 0, 3
-            patience, stop_cnt, min_loss = 200, 0, 1e9
+                max_nmi, max_ac, max_ari, max_f1, max_q, min_dbi = 0, 0, 0, 0, 0, 3
+                patience, stop_cnt, min_loss = 200, 0, 1e9
 
-            print(f"Training with {K} stable communities...")
-            for epoch in range(1, 301):
-                model.train()
-                optimizer.zero_grad()
-                pos_z, mu, r, dist = model(feat, edge, selected_communities)
-                loss = b * model.modularity(mu, r, pos_z, dist, adj, test_object, args)
-                loss.backward()
-                optimizer.step()
+                print(f"Training with {K} stable communities...")
+                for epoch in range(1, 301):
+                    model.train()
+                    optimizer.zero_grad()
+                    pos_z, mu, r, dist = model(feat, edge, selected_communities)
+                    loss = b * model.modularity(mu, r, pos_z, dist, adj, test_object, args)
+                    loss.backward()
+                    optimizer.step()
 
-                # Test and keep best metrics
-                if epoch % 2 == 0:
-                    model.eval()
-                    with torch.no_grad():
-                        node_emb, _, r_val, _ = model(feat, edge, selected_communities)
-                    r_assign = r_val.argmax(dim=1)
-                    t_nmi, t_ac, t_f1, t_ari, t_q = result(graph, r_assign, label)
-                    t_dbi = davies_bouldin_score(node_emb, r_assign)
-                    
-                    max_nmi, max_ac, max_f1, max_ari, max_q = max(max_nmi, t_nmi), max(max_ac, t_ac), max(max_f1, t_f1), max(max_ari, t_ari), max(max_q, t_q)
-                    min_dbi = min(min_dbi, t_dbi)
+                    # Test and keep best metrics
+                    if epoch % 2 == 0:
+                        model.eval()
+                        with torch.no_grad():
+                            node_emb, _, r_val, _ = model(feat, edge, selected_communities)
+                        r_assign = r_val.argmax(dim=1)
+                        t_nmi, t_ac, t_f1, t_ari, t_q = result(graph, r_assign, label)
+                        t_dbi = davies_bouldin_score(node_emb, r_assign)
+                        
+                        max_nmi, max_ac, max_f1, max_ari, max_q = max(max_nmi, t_nmi), max(max_ac, t_ac), max(max_f1, t_f1), max(max_ari, t_ari), max(max_q, t_q)
+                        min_dbi = min(min_dbi, t_dbi)
 
-                if loss < min_loss: min_loss, stop_cnt = loss, 0
-                else: stop_cnt += 1
-                if stop_cnt >= patience: break
+                    if loss < min_loss: min_loss, stop_cnt = loss, 0
+                    else: stop_cnt += 1
+                    if stop_cnt >= patience: break
 
-            # Save Results
-            end_total = time.perf_counter()
-            with open(file_name, "a+") as f:
-                f.write(f"{ds},{algo_name},{K},{max_nmi:.4f},{max_ac:.4f},{max_f1:.4f},{max_ari:.4f},{min_dbi:.4f},{max_q:.4f},{end_total-start_total:.2f}\n")
-            
-            print(f"Finished {algo_name}. Max NMI: {max_nmi:.4f}")
+                # Save Results
+                end_total = time.perf_counter()
+                with open(file_name, "a+") as f:
+                    f.write(f"{ds},{p_feat_val},{algo_name},{K},{max_nmi:.4f},{max_ac:.4f},{max_f1:.4f},{max_ari:.4f},{min_dbi:.4f},{max_q:.4f},{end_total-start_total:.2f}\n")
+                
+                print(f"Finished {algo_name}. Max NMI: {max_nmi:.4f}")
 
     except Exception as e:
         print(f"Error on {ds}: {e}")
