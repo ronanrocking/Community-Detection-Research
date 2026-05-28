@@ -133,7 +133,7 @@ for ds in dataset_list:
             max_nmi, max_ac, max_ari, max_f1, max_q, min_dbi = 0, 0, 0, 0, 0, 3
             patience, stop_cnt, min_loss = 200, 0, 1e9
 
-            print(f"Training with {K} stable communities...")
+            print(f"Training with {K} stable communities. GAT")
             for epoch in range(1, 301):
                 model.train()
                 optimizer.zero_grad()
