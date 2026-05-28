@@ -1,4 +1,4 @@
-from model import Encoder, corruption, Summarizer, cluster_net
+from model import Encoder, corruption, Summarizer, cluster_net, GATEncoder
 from utils.load_data import load_data
 from DGI import DeepGraphInfomax
 
@@ -126,7 +126,7 @@ for ds in dataset_list:
             # STEP 3: Model Training (Exactly as original)
             np.random.seed(args.seed)
             torch.manual_seed(args.seed)
-            model = DeepGraphInfomax(hidden_channels=args.hidden, encoder=Encoder(feat.shape[1], args.hidden), 
+            model = DeepGraphInfomax(hidden_channels=args.hidden, encoder=GATEncoder(feat.shape[1], args.hidden), 
                                      summary=Summarizer(), corruption=corruption, args=args, cluster=cluster_net).to(device)
             optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-3)
 

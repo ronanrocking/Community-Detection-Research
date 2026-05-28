@@ -52,6 +52,17 @@ class Encoder(nn.Module):
         x = self.prelu(x)
         return x
 
+class GATEncoder(nn.Module):
+    def __init__(self, in_channels, hidden_channels):
+        super(GATEncoder, self).__init__()
+        self.conv = GATConv(in_channels, hidden_channels, heads=4, concat=False)
+        self.prelu = nn.PReLU(hidden_channels)
+
+    def forward(self, x, edge_index, structure_center=None):
+        x = self.conv(x, edge_index)
+        x = self.prelu(x)
+        return x
+
 class Summarizer(nn.Module):
     def __init__(self):
         super(Summarizer, self).__init__()
