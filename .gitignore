@@ -43,3 +43,6 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+
+.aider.tags.cache.v4/
+.aider*
