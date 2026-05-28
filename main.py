@@ -91,7 +91,7 @@ def get_consensus_scaffold(graph, algo_type, n_runs=15):
 
 # --- Main Execution Setup ---
 #dataset_list = ["acm", "amac", "amap", "citeseer", "cocs", "cora", "film", "pubmed", "uat"]
-dataset_list = ["acm", "citeseer", "cora"]
+dataset_list = ["acm", "cora"]
 device = torch.device('cpu')
 b = 0.001 # Modularity loss weight from paper
 file_name = "consensus_results_again.csv"
@@ -108,10 +108,13 @@ for ds in dataset_list:
         adj, edge = torch.tensor(A).type(torch.float32), torch.tensor(np.array(np.where(A == 1)))
         test_object, graph = make_modularity_matrix(adj), nx.from_numpy_array(A)
 
+        print(f"Data object type: {type(data)}")
+        print(f"Attributes inside data: {dir(data)}")
+
         # Calculate sparsity and adaptive feature dropout probability
         feat_matrix = data.x if hasattr(data, 'x') else (data[0].x if hasattr(data, '__getitem__') else None)
         sparsity = float((feat_matrix == 0).sum() / feat_matrix.numel()) if feat_matrix is not None else 0.5
-        adaptive_p_feat = 0.6 * sparsity
+        adaptive_p_feat = 0.5 * sparsity
         print(f"  Sparsity for {ds}: {sparsity:.4f}")
         print(f"  Adaptive p_feat for {ds}: {adaptive_p_feat:.4f}")
 
