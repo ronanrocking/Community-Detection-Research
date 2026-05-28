@@ -112,7 +112,7 @@ for ds in dataset_list:
         print(f"Attributes inside data: {dir(data)}")
 
         # Calculate sparsity and adaptive feature dropout probability
-        feat_matrix = data.x if hasattr(data, 'x') else (data[0].x if hasattr(data, '__getitem__') else None)
+        feat_matrix = data.feature if hasattr(data, 'feature') else (data.x if hasattr(data, 'x') else None)
         sparsity = float((feat_matrix == 0).sum() / feat_matrix.numel()) if feat_matrix is not None else 0.5
         adaptive_p_feat = 0.5 * sparsity
         print(f"  Sparsity for {ds}: {sparsity:.4f}")
