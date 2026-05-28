@@ -108,36 +108,29 @@ for ds in dataset_list:
         adj, edge = torch.tensor(A).type(torch.float32), torch.tensor(np.array(np.where(A == 1)))
         test_object, graph = make_modularity_matrix(adj), nx.from_numpy_array(A)
 
-        
+        for p_feat_val in [0.15, 0.20, 0.30, 0.35]:
+            print(f"\n>>> Testing p_feat = {p_feat_val} for {ds} <<<")
+            for algo_name in ["Louvain","Leiden"]:
+                start_total = time.perf_counter()
+                
+                # STEP 1: Build the Consensus Scaffold
+                # This replaces the single-run "lucky" scaffold with a stable reference
+                structure_community = get_consensus_scaffold(graph, algo_name, n_runs=15)
 
-        # Calculate sparsity and adaptive feature dropout probability
-        feat_matrix = data.feature if hasattr(data, 'feature') else (data.x if hasattr(data, 'x') else None)
-        sparsity = float((feat_matrix == 0).sum() / feat_matrix.numel()) if feat_matrix is not None else 0.5
-        adaptive_p_feat = 0.5 * sparsity
-        print(f"  Sparsity for {ds}: {sparsity:.4f}")
-        print(f"  Adaptive p_feat for {ds}: {adaptive_p_feat:.4f}")
+                # STEP 2: Paper's Structural Filtering Logic
+                # Removes tiny outlier communities before calculating centers (mu)
+                nums = [len(i) for i in structure_community]
+                threshold = np.mean(nums) + 0.5 * np.std(nums)
+                selected_communities = [c for c in structure_community if len(c) > threshold]
+                K = len(selected_communities)
+                args.K = K
 
-        for algo_name in ["Louvain","Leiden"]:
-            start_total = time.perf_counter()
-            
-            # STEP 1: Build the Consensus Scaffold
-            # This replaces the single-run "lucky" scaffold with a stable reference
-            structure_community = get_consensus_scaffold(graph, algo_name, n_runs=15)
-
-            # STEP 2: Paper's Structural Filtering Logic
-            # Removes tiny outlier communities before calculating centers (mu)
-            nums = [len(i) for i in structure_community]
-            threshold = np.mean(nums) + 0.5 * np.std(nums)
-            selected_communities = [c for c in structure_community if len(c) > threshold]
-            K = len(selected_communities)
-            args.K = K
-
-            # STEP 3: Model Training (Exactly as original)
-            np.random.seed(args.seed)
-            torch.manual_seed(args.seed)
-            model = DeepGraphInfomax(hidden_channels=args.hidden, encoder=Encoder(feat.shape[1], args.hidden, p_feat=adaptive_p_feat), 
-                                     summary=Summarizer(), corruption=corruption, args=args, cluster=cluster_net).to(device)
-            optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-3)
+                # STEP 3: Model Training (Exactly as original)
+                np.random.seed(args.seed)
+                torch.manual_seed(args.seed)
+                model = DeepGraphInfomax(hidden_channels=args.hidden, encoder=Encoder(feat.shape[1], args.hidden, p_feat=p_feat_val), 
+                                         summary=Summarizer(), corruption=corruption, args=args, cluster=cluster_net).to(device)
+                optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-3)
 
             max_nmi, max_ac, max_ari, max_f1, max_q, min_dbi = 0, 0, 0, 0, 0, 3
             patience, stop_cnt, min_loss = 200, 0, 1e9
