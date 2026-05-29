@@ -22,3 +22,21 @@
 
 # 2026-05-26 19:38:01.498039
 +y
+
+# 2026-05-28 19:41:42.793505
++add main.py model.py dgi.py 
+
+# 2026-05-28 19:41:44.169367
++a
+
+# 2026-05-28 19:42:38.051228
++y
+
+# 2026-05-28 19:43:53.825069
++In model.py, import GATConv from torch_geometric.nn and create a new GATEncoder(nn.Module) class (do NOT delete the original Encoder) initialized with GATConv(in_channels, hidden_channels, heads=4, concat=False) and nn.PReLU(hidden_channels) where its forward(x, edge_index, structure_center=None) applies the convolution and activation strictly without any dropout logic; then in main.py, import GATEncoder, update the model initialization to use encoder=GATEncoder(feat.shape[1], args.hidden), and completely strip out the p_feat nested loop and any hardcoded feature/edge dropouts so it runs a clean, dropout-free consensus Louvain/Leiden baseline.
+
+# 2026-05-28 19:46:36.596882
++i dont see the changes in the file, check again
+
+# 2026-05-28 21:40:47.055094
++In model.py, update the GATEncoder class to accept p_feat=0.25 in its __init__ and apply x = F.dropout(x, p=self.p_feat, training=self.training) immediately before passing x into the GATConv layer in the forward function; then in main.py, ensure the encoder is initialized as encoder=GATEncoder(feat.shape[1], args.hidden, p_feat=0.25), and set dataset_list = ['acm', 'citeseer', 'cora', 'amap', 'amac'] to run the final hybrid benchmark across all five datasets.
