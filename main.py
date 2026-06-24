@@ -135,7 +135,12 @@ for ds in dataset_list:
             patience, stop_cnt, min_loss = 200, 0, 1e9
 
             print(f"Training with {K} stable communities (p_feat={p_feat_fixed})...")
+            temp_start = 1.0
+            temp_end = args.clustertemp
+            max_epochs = 300
             for epoch in range(1, 301):
+                current_temp = temp_start * ((temp_end / temp_start) ** (epoch / max_epochs))
+                model.cluster_temp = current_temp
                 model.train()
                 optimizer.zero_grad()
                 pos_z, mu, r, dist = model(feat, edge, selected_communities)
@@ -151,6 +156,7 @@ for ds in dataset_list:
                     r_assign = r_val.argmax(dim=1)
                     t_nmi, t_ac, t_f1, t_ari, t_q = result(graph, r_assign, label)
                     t_dbi = davies_bouldin_score(node_emb, r_assign)
+                    print(f"Epoch: {epoch}, Temp: {current_temp:.4f}")
                     
                     max_nmi, max_ac, max_f1, max_ari, max_q = max(max_nmi, t_nmi), max(max_ac, t_ac), max(max_f1, t_f1), max(max_ari, t_ari), max(max_q, t_q)
                     min_dbi = min(min_dbi, t_dbi)
