@@ -135,6 +135,8 @@ for ds in dataset_list:
             patience, stop_cnt, min_loss = 200, 0, 1e9
 
             print(f"Training with {K} stable communities (p_feat={p_feat_fixed})...")
+            ema_momentum = 0.5
+            ema_mu = None
             temp_start = 1.0
             temp_end = args.clustertemp
             max_epochs = 300
@@ -144,7 +146,11 @@ for ds in dataset_list:
                 model.train()
                 optimizer.zero_grad()
                 pos_z, mu, r, dist = model(feat, edge, selected_communities)
-                loss = b * model.modularity(mu, r, pos_z, dist, adj, test_object, args)
+                if ema_mu is None: ema_mu = mu.detach()
+                else: ema_mu = ema_momentum * ema_mu + (1 - ema_momentum) * mu.detach()
+                dist = pos_z @ ema_mu.t()
+                r = torch.softmax(model.cluster_temp * dist, 1)
+                loss = b * model.modularity(ema_mu, r, pos_z, dist, adj, test_object, args)
                 loss.backward()
                 optimizer.step()
 
