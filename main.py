@@ -91,10 +91,10 @@ def get_consensus_scaffold(graph, algo_type, n_runs=15):
 
 # --- Main Execution Setup ---
 #dataset_list = ["acm", "amac", "amap", "citeseer", "cocs", "cora", "film", "pubmed", "uat"]
-dataset_list = ["amac", "amap", "film"]
+dataset_list = ["amac", "amap"]
 device = torch.device('cpu')
 b = 0.001 # Modularity loss weight from paper
-file_name = "consensus_results_again.csv"
+file_name = "consensus_results_DynamicTemp.csv"
 
 for ds in dataset_list:
     args.dataset = ds
