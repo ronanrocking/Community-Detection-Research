@@ -98,132 +98,139 @@ def test(model):
     #print("New Center Metrics: ", r_nmi, r_ac, r_f1, r_ari, DBI, q)
     return node_emb, r_assign, r_nmi, r_ac, r_f1, r_ari, DBI, q
 
-device = torch.device('cpu')
-a = 0.0
-b = 0.001
-c = 0.0
-
+datasets = ['acm', 'citeseer', 'cora', 'amac', 'amap']
 file_name = "result.csv"
 
-start_time = time.perf_counter()
+# Clear the result file before starting
+with open(file_name, 'w') as f:
+    pass
 
-print("****************************", args.dataset, "dataset ******************************")
-file = open(file_name, "a+")
-print("****************************", args.dataset, "dataset ******************************", file=file)
-file.close()
+for dataset_name in datasets:
+    args.dataset = dataset_name
+    device = torch.device('cpu')
+    a = 0.0
+    b = 0.001
+    c = 0.0
 
-data = load_data("./", args.dataset,
-                 "tensor", "npy", "npy",
-                 False, False, False, None)
-feat = data.feature.type(torch.float32)
+    start_time = time.perf_counter()
 
-A = data.adj  # numpy
-adj = torch.tensor(A).type(torch.float32)
-indices = np.where(A == 1)
-indices_array = np.array(indices)
-edge = torch.tensor(indices_array)
+    print("****************************", args.dataset, "dataset ******************************")
+    file = open(file_name, "a+")
+    print("****************************", args.dataset, "dataset ******************************", file=file)
+    file.close()
 
-test_object = make_modularity_matrix(adj)
+    data = load_data("./", args.dataset,
+                     "tensor", "npy", "npy",
+                     False, False, False, None)
+    feat = data.feature.type(torch.float32)
 
-label = data.label
+    A = data.adj  # numpy
+    adj = torch.tensor(A).type(torch.float32)
+    indices = np.where(A == 1)
+    indices_array = np.array(indices)
+    edge = torch.tensor(indices_array)
 
-num_features = feat.shape[1]
+    test_object = make_modularity_matrix(adj)
 
-graph = nx.from_numpy_array(A)
-structure_community = nx.community.louvain_communities(graph, resolution=0.3, threshold=1e-09, seed=123)  # re=0.3
+    label = data.label
 
-structure_community_node_number = [len(i) for i in structure_community]
-mean_size = np.mean(structure_community_node_number)
-std_deviation = np.std(structure_community_node_number)
-threshold = mean_size + 0.5*std_deviation
+    num_features = feat.shape[1]
 
-selected_communities = [community for community in structure_community if len(community) > threshold]
+    graph = nx.from_numpy_array(A)
+    structure_community = nx.community.louvain_communities(graph, resolution=0.3, threshold=1e-09, seed=123)  # re=0.3
 
-K = len(selected_communities)
-print(f"The Number of Selected Structural Communities: {K}", end='')
-print(*[len(i) for i in selected_communities], sep=' ')
+    structure_community_node_number = [len(i) for i in structure_community]
+    mean_size = np.mean(structure_community_node_number)
+    std_deviation = np.std(structure_community_node_number)
+    threshold = mean_size + 0.5*std_deviation
 
-args.K = K
-args.cuda = torch.cuda.is_available()
+    selected_communities = [community for community in structure_community if len(community) > threshold]
 
-np.random.seed(args.seed)
-torch.manual_seed(args.seed)
-if args.cuda:
-    torch.cuda.manual_seed(args.seed)
+    K = len(selected_communities)
+    print(f"The Number of Selected Structural Communities: {K}", end='')
+    print(*[len(i) for i in selected_communities], sep=' ')
 
-hidden_size = args.hidden
-model = DeepGraphInfomax(
-    hidden_channels=hidden_size, encoder=Encoder(num_features, hidden_size),
-    summary=Summarizer(),
-    corruption=corruption,
-    args=args,
-    cluster=cluster_net).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-3)
+    args.K = K
+    args.cuda = torch.cuda.is_available()
 
-loss_para = f'{a}_{b}_{c} loss'
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if args.cuda:
+        torch.cuda.manual_seed(args.seed)
 
-max_nmi = 0
-max_ac = 0
-max_ari = 0
-max_f1 = 0
-min_dbi = 3
-max_q = 0
+    hidden_size = args.hidden
+    model = DeepGraphInfomax(
+        hidden_channels=hidden_size, encoder=Encoder(num_features, hidden_size),
+        summary=Summarizer(),
+        corruption=corruption,
+        args=args,
+        cluster=cluster_net).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-3)
 
-print(f"Start training {a}_{b}_{c} loss para!!!=================================")
-stop_cnt = 0
-best_idx = 0
-patience = 200
-min_loss = 1e9
-real_epoch = 0
+    loss_para = f'{a}_{b}_{c} loss'
 
-for epoch in range(1, 301):
-    loss = train()
-    if epoch % 2 == 0 and epoch > 0:
-        print('epoch = {}'.format(epoch))
-        final_z, final_r, tmp_max_nmi, tmp_max_ac, tmp_max_f1, tmp_max_ari, tmp_max_dbi, tmp_max_q = test(model)
+    max_nmi = 0
+    max_ac = 0
+    max_ari = 0
+    max_f1 = 0
+    min_dbi = 3
+    max_q = 0
 
-        max_nmi = max(max_nmi, tmp_max_nmi)
-        max_ac = max(max_ac, tmp_max_ac)
-        max_f1 = max(max_f1, tmp_max_f1)
-        max_ari = max(max_ari, tmp_max_ari)
-        min_dbi = min(min_dbi, tmp_max_dbi)
-        max_q = max(max_q, tmp_max_q)
-        print("----------------------------------------------------------")
-    if loss < min_loss:
-        min_loss = loss
-        best_idx = epoch
-        stop_cnt = 0
-        torch.save(model.state_dict(), 'best_model.pkl')
-    else:
-        stop_cnt += 1
-    if stop_cnt >= patience:
-        real_epoch = epoch
-        break
+    print(f"Start training {a}_{b}_{c} loss para!!!=================================")
+    stop_cnt = 0
+    best_idx = 0
+    patience = 200
+    min_loss = 1e9
+    real_epoch = 0
 
-print('Loading {}th epoch'.format(best_idx))
-model.load_state_dict(torch.load('best_model.pkl'))
-print('Start testing !!!')
-test(model)
-print("max nmi为", max_nmi)
-print("max ac为:", max_ac)
-print("max f1为:", max_f1)
-print("max ari为:", max_ari)
-print("min dbi为", min_dbi)
-print("max q:", max_q)
+    for epoch in range(1, 301):
+        loss = train()
+        if epoch % 2 == 0 and epoch > 0:
+            print('epoch = {}'.format(epoch))
+            final_z, final_r, tmp_max_nmi, tmp_max_ac, tmp_max_f1, tmp_max_ari, tmp_max_dbi, tmp_max_q = test(model)
+
+            max_nmi = max(max_nmi, tmp_max_nmi)
+            max_ac = max(max_ac, tmp_max_ac)
+            max_f1 = max(max_f1, tmp_max_f1)
+            max_ari = max(max_ari, tmp_max_ari)
+            min_dbi = min(min_dbi, tmp_max_dbi)
+            max_q = max(max_q, tmp_max_q)
+            print("----------------------------------------------------------")
+        if loss < min_loss:
+            min_loss = loss
+            best_idx = epoch
+            stop_cnt = 0
+            torch.save(model.state_dict(), 'best_model.pkl')
+        else:
+            stop_cnt += 1
+        if stop_cnt >= patience:
+            real_epoch = epoch
+            break
+
+    print('Loading {}th epoch'.format(best_idx))
+    model.load_state_dict(torch.load('best_model.pkl'))
+    print('Start testing !!!')
+    test(model)
+    print("max nmi为", max_nmi)
+    print("max ac为:", max_ac)
+    print("max f1为:", max_f1)
+    print("max ari为:", max_ari)
+    print("min dbi为", min_dbi)
+    print("max q:", max_q)
 
 
-file = open(file_name, "a+")
-print(f"The result of {a}_{b}_{c} loss para:-----------------", file=file)
-print("\tmin DBI:", min_dbi,
-      "\n\tmax Q:", max_q,
-      "\n\tmax NMI:", max_nmi,
-      "\n\tmax ACC:", max_ac,
-      "\n\tmax F1:", max_f1,
-      "\n\tmax ARI:", max_ari,
-      file=file)
-file.close()
-end_time = time.perf_counter()
-running_time = end_time - start_time
-print(f"The running time:{running_time}s")
-file = open(file_name, "a+")
-print(f"The running time:{running_time}s", file=file)
+    file = open(file_name, "a+")
+    print(f"The result of {a}_{b}_{c} loss para:-----------------", file=file)
+    print("\tmin DBI:", min_dbi,
+          "\n\tmax Q:", max_q,
+          "\n\tmax NMI:", max_nmi,
+          "\n\tmax ACC:", max_ac,
+          "\n\tmax F1:", max_f1,
+          "\n\tmax ARI:", max_ari,
+          file=file)
+    file.close()
+    end_time = time.perf_counter()
+    running_time = end_time - start_time
+    print(f"The running time:{running_time}s")
+    file = open(file_name, "a+")
+    print(f"The running time:{running_time}s", file=file)
