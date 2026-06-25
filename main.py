@@ -30,9 +30,11 @@ args = parser.parse_args()
 
 # --- Core Helper Functions (Original Research Logic) ---
 def make_modularity_matrix(adj):
-    adj = adj*(torch.ones(adj.shape[0], adj.shape[0]) - torch.eye(adj.shape[0]))
-    degrees = adj.sum(dim=0).unsqueeze(1)
-    mod = adj - degrees@degrees.t()/adj.sum()
+    A_2hop = torch.sparse.mm(adj.to_sparse(), adj.to_sparse()).to_dense()
+    A_2hop = (A_2hop > 0).float()
+    A_2hop.fill_diagonal_(0)
+    degrees = A_2hop.sum(dim=0).unsqueeze(1)
+    mod = A_2hop - (degrees @ degrees.t()) / A_2hop.sum()
     return mod
 
 def result(graph, pred, labels):
