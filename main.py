@@ -30,10 +30,22 @@ args = parser.parse_args()
 
 # --- Core Helper Functions (Original Research Logic) ---
 def make_modularity_matrix(adj):
-    adj = adj*(torch.ones(adj.shape[0], adj.shape[0]) - torch.eye(adj.shape[0]))
-    degrees = adj.sum(dim=0).unsqueeze(1)
-    mod = adj - degrees@degrees.t()/adj.sum()
-    return mod
+    # 1. Standard 1-hop modularity matrix (B1)
+    deg1 = adj.sum(dim=0).unsqueeze(1)
+    B1 = adj - (deg1 @ deg1.t()) / adj.sum()
+
+    # 2. Binarized 2-hop heterophily-aware modularity matrix (B2)
+    A2 = torch.sparse.mm(adj.to_sparse(), adj.to_sparse()).to_dense()
+    A2 = (A2 > 0).float()
+    A2.fill_diagonal_(0)
+    deg2 = A2.sum(dim=0).unsqueeze(1)
+    B2 = A2 - (deg2 @ deg2.t()) / (A2.sum() + 1e-8)
+
+    # 3. Combine them using a hybrid approach
+    alpha = 0.5
+    beta = 0.5
+    mod_matrix = (alpha * B1) + (beta * B2)
+    return mod_matrix
 
 def result(graph, pred, labels):
     pred_np = pred.numpy()
