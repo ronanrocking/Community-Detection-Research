@@ -89,13 +89,13 @@ def test(model):
         node_emb, mu, r, _ = model(feat, edge, selected_communities)
 
     r_assign = r.argmax(dim=1)
-    print('label is:')
-    count(label)
-    print('result of r_assign is:')
-    count(r_assign)
+    #print('label is:')
+    #count(label)
+    #print('result of r_assign is:')
+    #count(r_assign)
     r_nmi, r_ac, r_f1, r_ari, q = result(graph, r_assign, label)
     DBI = davies_bouldin_score(node_emb, r_assign)
-    print("New Center Metrics: ", r_nmi, r_ac, r_f1, r_ari, DBI, q)
+    #print("New Center Metrics: ", r_nmi, r_ac, r_f1, r_ari, DBI, q)
     return node_emb, r_assign, r_nmi, r_ac, r_f1, r_ari, DBI, q
 
 device = torch.device('cpu')
