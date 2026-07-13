@@ -12,6 +12,7 @@ import argparse
 import torch
 import os
 import csv
+from itertools import combinations
 
 # For Leiden and Consensus logic
 import igraph as ig
@@ -45,15 +46,122 @@ def result(graph, pred, labels):
     q = evaluation.compute_modularity(graph, pred)
     return nmi, ac, f1, ari, q
 
+def run_community_detection(graph, algo_type, seed):
+    num_nodes = graph.number_of_nodes()
+
+    if algo_type == "Louvain":
+        part = nx.community.louvain_communities(graph, resolution=0.3, seed=seed)
+        membership = np.zeros(num_nodes, dtype=int)
+        for cluster_id, nodes in enumerate(part):
+            for node in nodes:
+                membership[node] = cluster_id
+        communities = [set(nodes) for nodes in part]
+    else:
+        g_ig = ig.Graph.from_networkx(graph)
+        part = leidenalg.find_partition(
+            g_ig,
+            leidenalg.RBConfigurationVertexPartition,
+            resolution_parameter=0.3,
+            seed=seed,
+        )
+        membership = np.array(part.membership, dtype=int)
+        communities_by_id = {}
+        for node, cluster_id in enumerate(membership):
+            communities_by_id.setdefault(cluster_id, set()).add(node)
+        communities = list(communities_by_id.values())
+
+    return membership, communities
+
+def get_usable_k(communities):
+    if not communities:
+        return 0
+
+    nums = [len(i) for i in communities]
+    threshold = np.mean(nums) + 0.5 * np.std(nums)
+    return len([c for c in communities if len(c) > threshold])
+
+def get_community_balance(communities, num_nodes):
+    if not communities or num_nodes == 0:
+        return 0.0
+
+    sizes = [len(c) for c in communities]
+    largest_ratio = max(sizes) / num_nodes
+    tiny_threshold = max(3, 0.005 * num_nodes)
+    tiny_ratio = len([size for size in sizes if size < tiny_threshold]) / len(sizes)
+    balance = 1 - 0.5 * largest_ratio - 0.5 * tiny_ratio
+    return float(np.clip(balance, 0.0, 1.0))
+
+def build_consensus_communities(graph, memberships):
+    num_nodes = graph.number_of_nodes()
+    n_runs = len(memberships)
+    co_matrix = np.zeros((num_nodes, num_nodes))
+
+    for membership in memberships:
+        for n1 in range(num_nodes):
+            for n2 in range(n1 + 1, num_nodes):
+                if membership[n1] == membership[n2]:
+                    co_matrix[n1, n2] += 1
+                    co_matrix[n2, n1] += 1
+
+    consensus_adj = (co_matrix / n_runs) > 0.5
+    consensus_graph = nx.from_numpy_array(consensus_adj.astype(int))
+    return nx.community.louvain_communities(consensus_graph, resolution=0.3, seed=args.seed)
+
+def score_algorithm_candidate(graph, algo_type, seed, probe_runs):
+    memberships = []
+    usable_ks = []
+    balances = []
+
+    for i in range(probe_runs):
+        membership, communities = run_community_detection(graph, algo_type, seed + i)
+        memberships.append(membership)
+        usable_ks.append(get_usable_k(communities))
+        balances.append(get_community_balance(communities, graph.number_of_nodes()))
+
+    pair_scores = [
+        evaluation.NMI_helper(first, second)
+        for first, second in combinations(memberships, 2)
+    ]
+    stability = float(np.mean(pair_scores)) if pair_scores else 0.0
+    k_stability = float(1 / (1 + np.std(usable_ks)))
+    balance = float(np.mean(balances)) if balances else 0.0
+    score = 0.60 * stability + 0.25 * k_stability + 0.15 * balance
+
+    return {
+        "algorithm": algo_type,
+        "score": score,
+        "stability": stability,
+        "k_stability": k_stability,
+        "balance": balance,
+        "usable_ks": usable_ks,
+    }
+
+def choose_scaffold_algorithm(graph, seed, probe_runs):
+    candidates = [
+        score_algorithm_candidate(graph, "Louvain", seed, probe_runs),
+        score_algorithm_candidate(graph, "Leiden", seed, probe_runs),
+    ]
+    return max(candidates, key=lambda item: item["score"]), candidates
+
+def print_selector_reasoning(best, candidates):
+    print("Adaptive scaffold selection reasoning:")
+    for candidate in candidates:
+        print(
+            f"  {candidate['algorithm']}: score={candidate['score']:.4f}, "
+            f"stability={candidate['stability']:.4f}, "
+            f"K-stability={candidate['k_stability']:.4f}, "
+            f"balance={candidate['balance']:.4f}, "
+            f"probe_Ks={candidate['usable_ks']}"
+        )
+    print(f"Chosen scaffold algorithm: {best['algorithm']}")
+
 # --- NEW: CONSENSUS SCAFFOLD GENERATION ---
 def get_consensus_scaffold(graph, algo_type, n_runs=15):
     """
     Runs clustering multiple times with varying seeds to find the 
     most stable community structure (Consensus).
     """
-    num_nodes = graph.number_of_nodes()
-    # Co-association matrix: tracks how many times nodes i and j share a community
-    co_matrix = np.zeros((num_nodes, num_nodes))
+    memberships = []
     
     print(f"Generating Consensus {algo_type} Scaffold ({n_runs} runs)...")
     
@@ -61,34 +169,11 @@ def get_consensus_scaffold(graph, algo_type, n_runs=15):
         # We vary the seed each run to explore different local optima
         current_seed = args.seed + i 
         
-        if algo_type == "Louvain":
-            # Louvain is stochastic and sensitive to node processing order
-            part = nx.community.louvain_communities(graph, resolution=0.3, seed=current_seed)
-            membership = np.zeros(num_nodes)
-            for cluster_id, nodes in enumerate(part):
-                for node in nodes: membership[node] = cluster_id
-        else:
-            # Leiden also has a stochastic refinement phase
-            g_ig = ig.Graph.from_networkx(graph)
-            part = leidenalg.find_partition(g_ig, leidenalg.RBConfigurationVertexPartition, 
-                                            resolution_parameter=0.3, seed=current_seed)
-            membership = part.membership
-
-        # Update the co-association matrix with pairs found in the same cluster
-        for n1 in range(num_nodes):
-            for n2 in range(n1 + 1, num_nodes):
-                if membership[n1] == membership[n2]:
-                    co_matrix[n1, n2] += 1
-                    co_matrix[n2, n1] += 1
-
-    # CONSENSUS THRESHOLD:
-    # Only keep connections that appeared in > 50% of the runs (Majority Vote)
-    consensus_adj = (co_matrix / n_runs) > 0.5
-    consensus_graph = nx.from_numpy_array(consensus_adj.astype(int))
+        membership, _ = run_community_detection(graph, algo_type, current_seed)
+        memberships.append(membership)
     
     # Final pass to extract the stable community structure
-    consensus_communities = nx.community.louvain_communities(consensus_graph, resolution=0.3, seed=args.seed)
-    return consensus_communities
+    return build_consensus_communities(graph, memberships)
 
 def append_result_row(file_name, row):
     fieldnames = [
@@ -131,7 +216,10 @@ for ds in dataset_list:
         test_object, graph = make_modularity_matrix(adj), nx.from_numpy_array(A)
         p_feat_fixed = 0.25 # Fixed p_feat value as per requirement
 
-        for algo_name in ["Louvain"]:
+        best_algo, selector_candidates = choose_scaffold_algorithm(graph, args.seed, 3)
+        print_selector_reasoning(best_algo, selector_candidates)
+
+        for algo_name in [best_algo["algorithm"]]:
             start_total = time.perf_counter()
             
             # STEP 1: Build the Consensus Scaffold
