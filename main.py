@@ -11,6 +11,7 @@ import numpy as np
 import argparse
 import torch
 import os
+import csv
 
 # For Leiden and Consensus logic
 import igraph as ig
@@ -89,12 +90,33 @@ def get_consensus_scaffold(graph, algo_type, n_runs=15):
     consensus_communities = nx.community.louvain_communities(consensus_graph, resolution=0.3, seed=args.seed)
     return consensus_communities
 
+def append_result_row(file_name, row):
+    fieldnames = [
+        "dataset",
+        "p_feat",
+        "algorithm",
+        "K",
+        "nmi",
+        "accuracy",
+        "f1",
+        "ari",
+        "dbi",
+        "modularity",
+        "elapsed_seconds",
+    ]
+    needs_header = not os.path.exists(file_name) or os.path.getsize(file_name) == 0
+    with open(file_name, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if needs_header:
+            writer.writeheader()
+        writer.writerow(row)
+
 # --- Main Execution Setup ---
 #dataset_list = ["acm", "amac", "amap", "citeseer", "cocs", "cora", "film", "pubmed", "uat"]
-dataset_list = ["amac", "amap", "film"]
+dataset_list = ["amac", "amap"]
 device = torch.device('cpu')
 b = 0.001 # Modularity loss weight from paper
-file_name = "consensus_results_again.csv"
+file_name = "dropEdge-results.csv"
 
 for ds in dataset_list:
     args.dataset = ds
@@ -109,7 +131,7 @@ for ds in dataset_list:
         test_object, graph = make_modularity_matrix(adj), nx.from_numpy_array(A)
         p_feat_fixed = 0.25 # Fixed p_feat value as per requirement
 
-        for algo_name in ["Louvain","Leiden"]:
+        for algo_name in ["Leiden"]:
             start_total = time.perf_counter()
             
             # STEP 1: Build the Consensus Scaffold
@@ -161,8 +183,19 @@ for ds in dataset_list:
 
             # Save Results
             end_total = time.perf_counter()
-            with open(file_name, "a+") as f:
-                f.write(f"{ds},{p_feat_fixed},{algo_name},{K},{max_nmi:.4f},{max_ac:.4f},{max_f1:.4f},{max_ari:.4f},{min_dbi:.4f},{max_q:.4f},{end_total-start_total:.2f}\n")
+            append_result_row(file_name, {
+                "dataset": ds,
+                "p_feat": p_feat_fixed,
+                "algorithm": algo_name,
+                "K": K,
+                "nmi": f"{max_nmi:.4f}",
+                "accuracy": f"{max_ac:.4f}",
+                "f1": f"{max_f1:.4f}",
+                "ari": f"{max_ari:.4f}",
+                "dbi": f"{min_dbi:.4f}",
+                "modularity": f"{max_q:.4f}",
+                "elapsed_seconds": f"{end_total-start_total:.2f}",
+            })
             
             print(f"Finished {algo_name}. Max NMI: {max_nmi:.4f}")
 
