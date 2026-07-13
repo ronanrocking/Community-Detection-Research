@@ -113,7 +113,7 @@ def append_result_row(file_name, row):
 
 # --- Main Execution Setup ---
 #dataset_list = ["acm", "amac", "amap", "citeseer", "cocs", "cora", "film", "pubmed", "uat"]
-dataset_list = ["amac", "amap"]
+dataset_list = ["acm", "citeseer", "cora"]
 device = torch.device('cpu')
 b = 0.001 # Modularity loss weight from paper
 file_name = "dropEdge-results.csv"
@@ -131,7 +131,7 @@ for ds in dataset_list:
         test_object, graph = make_modularity_matrix(adj), nx.from_numpy_array(A)
         p_feat_fixed = 0.25 # Fixed p_feat value as per requirement
 
-        for algo_name in ["Leiden"]:
+        for algo_name in ["Louvain"]:
             start_total = time.perf_counter()
             
             # STEP 1: Build the Consensus Scaffold
