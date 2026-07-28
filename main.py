@@ -198,10 +198,10 @@ def append_result_row(file_name, row):
 
 # --- Main Execution Setup ---
 #dataset_list = ["acm", "amac", "amap", "citeseer", "cocs", "cora", "film", "pubmed", "uat"]
-dataset_list = ["acm", "citeseer", "cora"]
+dataset_list = ["film", "pubmed", "uat", "cocs" ]
 device = torch.device('cpu')
 b = 0.001 # Modularity loss weight from paper
-file_name = "dropEdge-results.csv"
+file_name = "FinalResults.csv"
 
 for ds in dataset_list:
     args.dataset = ds

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.nn import Linear
 from torch_geometric.nn import GCNConv, GATConv, APPNP
 import math
-import sklearn
+from sklearn.cluster import kmeans_plusplus
 from torch_geometric.utils import dropout_edge
 
 # The GELU function is present in the provided model.py but is not used in the Encoder.
@@ -71,8 +71,7 @@ def corruption(x, edge_index, structrue_center):
 def cluster_net(data, k, temp, num_iter, cluster_temp,init):
     if init is None:
         data_np = data.detach().numpy()
-        norm = (data_np**2).sum(axis=1)
-        init = sklearn.cluster.k_means_._k_init(data_np, k, norm, sklearn.utils.check_random_state(None))
+        init, _ = kmeans_plusplus(data_np, n_clusters=k, random_state=None)
         init = torch.tensor(init, requires_grad=True)
         if num_iter == 0: return init
     mu = init

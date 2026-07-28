@@ -1,0 +1,18 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# Reconstructed environment used by the July 2026 DropEdge experiments.
+# Keep the graph-community versions pinned: newer igraph/Leiden changes the
+# ACM consensus scaffold from K=11 to K=10.
+torch==2.13.0+cpu
+torch-geometric==2.8.0
+numpy==2.2.6
+scipy==1.15.3
+scikit-learn==1.7.2
+networkx==3.1
+python-igraph==0.11.8
+leidenalg==0.10.2
+munkres==1.1.4
+matplotlib==3.10.9
+
+# Verification/development tooling.
+pytest==8.3.5
