@@ -260,7 +260,11 @@ for ds in dataset_list:
                         node_emb, _, r_val, _ = model(feat, edge, selected_communities)
                     r_assign = r_val.argmax(dim=1)
                     t_nmi, t_ac, t_f1, t_ari, t_q = result(graph, r_assign, label)
-                    t_dbi = davies_bouldin_score(node_emb, r_assign)
+                    t_dbi = (
+                        davies_bouldin_score(node_emb, r_assign)
+                        if r_assign.unique().numel() > 1
+                        else min_dbi
+                    )
                     
                     max_nmi, max_ac, max_f1, max_ari, max_q = max(max_nmi, t_nmi), max(max_ac, t_ac), max(max_f1, t_f1), max(max_ari, t_ari), max(max_q, t_q)
                     min_dbi = min(min_dbi, t_dbi)

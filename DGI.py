@@ -42,7 +42,7 @@ class DeepGraphInfomax(torch.nn.Module):
 
     def forward(self, *args, **kwargs):
         pos_z = self.encoder(*args, **kwargs)  # GCN学习节点表示
-        pos_z = torch.diag(1. / torch.norm(pos_z, p=2, dim=1)) @ pos_z  # 节点表示进行L2归一化处理
+        pos_z = F.normalize(pos_z, p=2, dim=1, eps=1e-12)  # Stable equivalent L2 normalization.
 
         community_tensors = [torch.tensor(list(comm), dtype=torch.long) for comm in args[2]]
         center = [torch.mean(pos_z.index_select(0, comm_tensor), dim=0) for comm_tensor in community_tensors]
